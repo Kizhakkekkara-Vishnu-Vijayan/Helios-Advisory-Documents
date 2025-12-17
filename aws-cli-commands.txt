@@ -1,0 +1,132 @@
+1. ---------Get Running and stopped ec2 instance status form awscli command----------
+
+aws ec2 describe-instances \
+  --filters Name=instance-state-name,Values=running,stopped \
+  --query "Reservations[].Instances[].{Name: Tags[?Key=='Name']|[0].Value, InstanceId: InstanceId, State: State.Name, InstanceType: InstanceType}" \
+  --output table > ec2_instances.txt 
+
+awk '{print $1","$2","$3","$4}' ec2_instances.txt 
+
+
+aws ec2 describe-instances --filters Name=instance-state-name,Values=running,stopped --query "Reservations[].Instances[].{Name: Tags[?Key=='Name']|[0].Value, InstanceId: InstanceId, State: State.Name, InstanceType: InstanceType}" --output json | jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' > ec2_instances.csv
+
+
+2. ---------Get Rds cluster and Instance tags---------
+
+(
+  echo "Key,Value"
+  aws resourcegroupstaggingapi get-resources \
+    --resource-type-filters rds:cluster rds:db \
+    --query 'ResourceTagMappingList[].Tags[].{Key:Key,Value:Value}' \
+    --output text \
+  | sed 's/\t/,/' \
+  | sort -u
+) > rds-unique-tags.csv
+  
+3. ---------Get Running AMI Images status form awscli command----------
+
+aws ec2 describe-images --image-ids ami-01c9e5b74195c1bce
+
+4. ---------Store AMI Image into S3 Bucket using awscli command----------
+
+sudo aws ec2 create-store-image-task --image-id ami-0ecfb9bc39eef7af1 --bucket test-shubham-helios/csv/vishnu
+
+5. ---------S3 copy aws cli command ----------
+
+aws s3 cp s3://code-backup-helios/ami-backup-imp/June-2025/ami-0474c1c87a88b3650.bin  s3://code-backup-helios/ami-backup-imp/June-2025/master-prod-cidco-info-wp-ami-0474c1c87a88b3650.bin 
+
+6. ---------S3 export task state of AMI in %----------
+
+sudo aws ec2 describe-store-image-tasks --image-id ami-0d6ff46ab9044b956 
+
+7. ---------AMI to S3 export task aws cli command----------
+
+aws ec2 create-store-image-task --image-id ami-03d31ed76f0565a55 --bucket code-backup-helios/ami-backup-imp/June-2025
+
+8. ---------S3 to AMI restore export task aws cli command----------
+
+aws ec2 create-restore-image-task --object-key ami-04c49ce636d892926.bin --bucket s3bucketfortest123 --name "bharatamitesting"
+Other examples:
+aws ec2 create-restore-image-task --object-key ami-backup/ami-09646d5353a72d7e4.bin --bucket code-backup-helios --name "eauction-dev-server-NEW"
+aws ec2 create-restore-image-task --object-key ami-backup/ami-077d0b7eb2efca86d.bin --bucket code-backup-helios --name "heliosmedium-domain"
+
+9. ---------Zip command of folder----------
+
+zip -r <dest> <src>
+zip -r <data>/<filename.zip> <src>
+zip -r /Data/Backup/1_scheme /Data/www/html/restapi/applicationservice/uploads/preferences/1_scheme
+
+10. ---------Number of requests per server linux command----------
+
+watch -n 1 "echo -n 'Apache Processes: ' && ps -C apache2 --no-headers | wc -l && free -m"
+
+11. ---------Deleting files inside folder using count value-------- 
+
+To check the files which are going to get deleted.
+ls -1tr /home/vishnu/sessions/ | head -n 2 | while read f; do echo "Deleting $f"; done
+
+Actual deletion of files inside folder according to count
+
+ls -1tr /home/vishnu/sessions/ | head -n 2 | while read f; do rm -rf "/home/vishnu/sessions/$f"; done
+
+12.----------Deleting all files inside a folder----------
+
+Delete from any location using absolute path
+rm -rf /home/vishnu/testpdfzip/*
+
+Relative path, if already inside the following directory "/home/vishnu/testpdfzip"
+
+rm -rf ./*
+
+13.----------To get the local git credentials used by user to push and pull code to remote repository-----------
+Win + R → control keymgr.dll
+
+14.----------To get which branch of the remote repository the git push or git pull will happen----------
+git branch --show-current
+
+15.----------To add new credentials in already configured local git repository-----------
+git credential-cache exit
+git remote set-url origin https://aws.helios@gitlab.com/heliosadvisory/hrm-dev.git //git remote set-url origin https://<username>@gitlab.com/heliosadvisory/hrm-dev.git
+It will as for new password for remote repository/new PAT key
+git pull
+
+16.----------To use differenct user credential for cloning repository(It will prompt to enter user password before cloning for authentication)--------
+git -c credential.username=nileshpasare clone https://gitlab.com/nileshPasare/nodejs-test.git
+
+17.----------To get running and stopped ec2 instance credit usage mode(standard/unlimited)----------
+echo "InstanceId,NameTag,CpuCredits,InstanceType" > ec2_credit_specifications.csv && \
+aws ec2 describe-instances \
+  --filters "Name=instance-state-name,Values=running,stopped" \
+  --query 'Reservations[].Instances[].{InstanceId:InstanceId,Name:Tags[?Key==`Name`]|[0].Value,InstanceType:InstanceType}' \
+  --output json | jq -r '.[] | [.InstanceId, .Name, .InstanceType] | @tsv' | while IFS=$'\t' read -r id name itype; do
+    if [[ $itype == t* ]]; then
+      credit=$(aws ec2 describe-instance-credit-specifications \
+        --instance-ids "$id" \
+        --query "InstanceCreditSpecifications[].CpuCredits" \
+        --output text)
+    else
+      credit="N/A"
+    fi
+    echo "$id,$name,$credit,$itype"
+done >> ec2_credit_specifications.csv
+
+18.-----------AWS cli command to convert all the running and stopped instances in unlimited mode to standard mode-----------
+aws ec2 describe-instances \
+  --filters "Name=instance-state-name,Values=running,stopped" \
+  --query "Reservations[].Instances[?starts_with(InstanceType, 't')].[InstanceId]" \
+  --output text | xargs -n 1 -I {} aws ec2 modify-instance-credit-specification \
+  --instance-credit-specifications InstanceId={},CpuCredits=standard
+
+19.-----------To copy files from tar.gz directly into another directory-------------
+tar -xvzf /Data/backup/WP/WP-2025-10-06.tar.gz \
+    /Data/www/html/infoprod/wp-content/plugins/wp-ultimate-csv-importer/assets/js/admin-v6.1.js \
+    /Data/www/html/infoprod/wp-content/plugins/wp-ultimate-csv-importer/controllers/Security.php
+
+20.-----------To create tar.gz file (c-create, z-gzip, f-file, C-change directory path to source folder) directory-------------
+tar -czf /home/vishnu/pdf_files.tar.gz -C /home/vishnu/shell_scripts/pdf_downloader_csv/pdf_files .
+tar -czf pdf_files.tar.gz .
+
+21.-----------To uncompress tar.gz file (x-extract, z-gzip, f-file, C-change directory path to source folder) directory-------------
+tar -xzf /home/vishnu/pdf_files.tar
+tar -xzf /home/vishnu/pdf_files.tar -C /path/to/target_directory
+
